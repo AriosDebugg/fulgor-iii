@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fulgor III</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  /* Concepto: web de espera de un servidor con apartados (inicio, señales, archivo, decodificador, terminal).
+     Estética de expedientes y brasas: bloques cuadrados con sombra escalonada, colores sacados del logo. */
+  :root {
+    --bg: #130809;
+    --bg-2: #1e0d0b;
+    --ember: #7a1f10;
+    --orange: #f28c28;
+    --yellow: #ffd23f;
+    --cream: #fff1c9;
+    --muted: #b79a86;
+    --faint: #7d6254;
+    --line: #3a1c14;
+    --ok: #8fd16a;
+    --bad: #ff7a5c;
+    --font-display: "Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--cream);
+    font-family: var(--font-mono);
+    font-size: 15px; line-height: 1.6;
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-x: hidden;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 20%, rgba(242,140,40,.22), transparent 70%),
+      radial-gradient(ellipse 80% 60% at 50% 110%, rgba(122,31,16,.5), transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  a { color: var(--yellow); }
+  :focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
+
+  .shell { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; min-height: calc(100vh - 48px); }
+
+  /* Navegación */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+  .brand { display: block; line-height: 0; }
+  .brand img { height: 46px; width: auto; display: block; }
+  nav ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  nav a {
+    display: block; padding: 8px 12px; text-decoration: none;
+    color: var(--muted); font-size: .78rem; letter-spacing: .14em; text-transform: uppercase;
+    border: 2px solid transparent; border-bottom-color: var(--line);
+  }
+  nav a:hover { color: var(--cream); border-bottom-color: var(--orange); }
+  nav a[aria-current="page"] { color: var(--bg); background: var(--yellow); border-color: var(--yellow); font-weight: 700; }
+
+  main { flex: 1; display: flex; flex-direction: column; }
+  .view { display: none; flex: 1; flex-direction: column; gap: 28px; }
+  .view.on { display: flex; }
+  .view.home { justify-content: center; gap: 36px; }
+
+  h2.title {
+    margin: 0; font-family: var(--font-display); font-weight: 400; text-transform: uppercase;
+    font-size: clamp(2rem, 7vw, 3.2rem); line-height: 1; color: var(--yellow);
+    text-shadow: 3px 3px 0 var(--ember); text-wrap: balance;
+  }
+  .lead { margin: 0; color: var(--muted); max-width: 62ch; }
+
+  /* Inicio */
+  .logo-wrap { display: flex; justify-content: center; }
+  .logo { width: min(540px, 100%); height: auto; filter: drop-shadow(0 0 40px rgba(255,170,50,.35)); animation: float 6s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-8px); } }
+  .status { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: .8rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 10px var(--orange); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .countdown { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .unit { background: linear-gradient(180deg, var(--bg-2), var(--bg)); border: 2px solid var(--line); border-top-color: var(--orange); border-radius: 6px; padding: 18px 8px 14px; text-align: center; min-width: 0; }
+  .num { display: block; font-weight: 700; font-size: clamp(2rem, 9vw, 4.6rem); line-height: 1; font-variant-numeric: tabular-nums; color: var(--yellow); text-shadow: 0 0 22px rgba(255,210,63,.35); }
+  .label { display: block; margin-top: 10px; font-size: clamp(.62rem, 2.4vw, .8rem); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .signal-btn { align-self: center; background: none; border: 2px solid transparent; font: inherit; color: var(--muted); cursor: pointer; padding: 10px 16px; }
+  .signal-btn:hover { color: var(--cream); border-color: var(--line); }
+  .signal-btn:hover .dot { animation-duration: .6s; }
+  .home.glitch .logo { animation: glitch .18s steps(2) 7; }
+  .home.glitch .countdown, .home.glitch .soon { animation: glitch .18s steps(2) 7; }
+  @keyframes glitch {
+    0% { transform: translate(0, 0); filter: hue-rotate(0deg) drop-shadow(0 0 40px rgba(255,170,50,.35)); }
+    25% { transform: translate(-6px, 2px); filter: hue-rotate(40deg) drop-shadow(4px 0 0 rgba(255,0,60,.6)); }
+    50% { transform: translate(5px, -3px); filter: hue-rotate(-50deg) drop-shadow(-4px 0 0 rgba(0,200,255,.5)); }
+    75% { transform: translate(-3px, -1px); filter: hue-rotate(20deg); }
+    100% { transform: translate(0, 0); filter: none; }
+  }
+  .ping { animation: ping 1s ease-in-out 3; }
+  @keyframes ping { 50% { border-color: var(--yellow); box-shadow: 5px 5px 0 var(--ember), 0 0 28px rgba(255,210,63,.55); } }
+  .until { text-align: center; margin: -18px 0 0; font-size: .85rem; color: var(--muted); letter-spacing: .08em; }
+  .soon {
+    margin: 0; text-align: center; font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(2.4rem, 11vw, 6rem); line-height: .95; text-transform: uppercase; text-wrap: balance;
+    background: linear-gradient(180deg, #fff3b0 0%, var(--yellow) 35%, var(--orange) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 0 var(--ember)) drop-shadow(0 0 24px rgba(242,140,40,.35));
+  }
+  .cursor { display: inline-block; width: .08em; margin-left: .08em; height: .8em; background: var(--yellow); vertical-align: -.05em; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .hint-home { text-align: center; margin: 0; color: var(--muted); font-size: .85rem; }
+
+  /* Bloques con sombra escalonada */
+  .card { background: var(--bg-2); border: 2px solid var(--line); box-shadow: 5px 5px 0 var(--ember); padding: 18px 20px; min-width: 0; }
+  .card h3 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 400; font-size: 1.5rem; color: var(--cream); line-height: 1.15; }
+  .meta { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--orange); margin: 0 0 8px; }
+  .card p { margin: 0 0 10px; }
+  .card p:last-child { margin-bottom: 0; }
+  .stack { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Señales */
+  .redact { display: inline-block; background: var(--line); color: transparent; user-select: none; border-radius: 2px; }
+  .code { display: block; margin: 10px 0; padding: 10px 12px; background: var(--bg); border-left: 4px solid var(--orange); color: var(--yellow); font-weight: 700; letter-spacing: .12em; overflow-wrap: anywhere; user-select: all; }
+  .sealed { opacity: .7; border-style: dashed; box-shadow: none; }
+
+  /* Archivo */
+  .lock-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .lock-row input { flex: 1 1 200px; min-width: 0; }
+  input[type="text"], textarea, select {
+    font: inherit; color: var(--cream); background: var(--bg); border: 2px solid var(--line); padding: 10px 12px; border-radius: 0; width: 100%;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--orange); outline: none; }
+  button.btn {
+    font: inherit; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: .8rem;
+    color: var(--bg); background: var(--yellow); border: 2px solid var(--yellow); padding: 10px 16px; cursor: pointer; box-shadow: 3px 3px 0 var(--ember);
+  }
+  button.btn:hover { background: var(--orange); border-color: var(--orange); }
+  button.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ember); }
+  .msg { min-height: 1.4em; margin: 8px 0 0; font-size: .85rem; }
+  .msg.bad { color: var(--bad); }
+  .msg.good { color: var(--ok); }
+  .badge { display: inline-block; font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; padding: 2px 8px; border: 2px solid var(--faint); color: var(--muted); margin-left: 8px; vertical-align: middle; }
+  .badge.open { border-color: var(--ok); color: var(--ok); }
+
+  /* Decodificador */
+  .tool { display: grid; gap: 14px; }
+  .tool label { display: block; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .tool textarea { min-height: 110px; resize: vertical; }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .out { min-height: 110px; padding: 10px 12px; background: var(--bg); border: 2px solid var(--orange); color: var(--yellow); font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; }
+  input[type="range"] { width: 100%; accent-color: var(--orange); }
+
+  /* Terminal */
+  .term { background: #0b0505; border: 2px solid var(--line); box-shadow: 5px 5px 0 var(--ember); padding: 14px; min-height: 340px; max-height: 60vh; overflow-y: auto; font-size: .9rem; }
+  .term .ln { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .term .me { color: var(--yellow); }
+  .term .sys { color: var(--cream); }
+  .term .dim { color: var(--muted); }
+  .prompt { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .prompt span { color: var(--orange); font-weight: 700; }
+  .prompt input { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 2px solid var(--line); padding: 6px 2px; color: var(--yellow); font: inherit; }
+  .prompt input:focus { border-bottom-color: var(--orange); outline: none; }
+
+  footer { text-align: center; font-size: .7rem; color: var(--faint); letter-spacing: .12em; }
+  footer .tag { text-transform: uppercase; margin: 0 0 6px; }
+  footer a { color: var(--muted); }
+  footer .bits { margin: 0; letter-spacing: .06em; overflow-wrap: anywhere; user-select: all; }
+
+  @media (max-width: 480px) {
+    .countdown { gap: 8px; }
+    .unit { padding: 14px 4px 10px; }
+    nav a { padding: 7px 9px; font-size: .7rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .logo, .dot, .cursor { animation: none; } }
+</style>
+
+</head>
+<body>
+<!-- Si estás leyendo esto: buen ojo. Prueba a escribir "pista" en el terminal. -->
+
+<div class="shell">
+  <header class="topbar">
+    <a class="brand" href="#inicio" aria-label="Ir al inicio"><img src="logo.png" alt="Fulgor III" width="788" height="509"></a>
+    <nav aria-label="Apartados">
+      <ul>
+        <li><a href="#inicio" data-nav="inicio">Inicio</a></li>
+        <li><a href="#senales" data-nav="senales">Señales</a></li>
+        <li><a href="#archivo" data-nav="archivo">Archivo</a></li>
+        <li><a href="#decodificador" data-nav="decodificador">Decodificador</a></li>
+        <li><a href="#terminal" data-nav="terminal">Terminal</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <!-- INICIO -->
+    <section class="view home" data-view="inicio" aria-label="Inicio">
+      <div class="logo-wrap"><img class="logo" src="logo.png" alt="Fulgor III" width="788" height="509"></div>
+      <button type="button" class="status signal-btn" id="signal-btn" aria-label="Servidor en espera. Pulsa para recibir una señal"><span class="dot" aria-hidden="true"></span><span id="status-text">Servidor en espera</span></button>
+      <ul class="countdown" aria-label="Cuenta atrás para el 20 de marzo de 2027">
+        <li class="unit"><span class="num" id="d">00</span><span class="label">Días</span></li>
+        <li class="unit"><span class="num" id="h">00</span><span class="label">Horas</span></li>
+        <li class="unit"><span class="num" id="m">00</span><span class="label">Minutos</span></li>
+        <li class="unit"><span class="num" id="s">00</span><span class="label">Segundos</span></li>
+      </ul>
+      <p class="until">Apertura: 20 de marzo de 2027</p>
+      <h1 class="soon" id="msg">Nos vemos pronto<span class="cursor" aria-hidden="true"></span></h1>
+      <p class="hint-home">Mientras tanto, hay cosas escondidas por aquí.</p>
+      <p class="hint-home"><a href="https://x.com/PixelmonFulgor" target="_blank" rel="noopener">Síguenos en X: @PixelmonFulgor</a></p>
+    </section>
+
+    <!-- SEÑALES -->
+    <section class="view" data-view="senales" aria-label="Señales">
+      <h2 class="title">Señales</h2>
+      <p class="lead">Mensajes que han ido apareciendo por el mundo. Nadie sabe quién los deja. Aquí se van anotando todos.</p>
+      <div class="stack">
+        <article class="card" id="sig-001">
+          <p class="meta">15 nov 2026 · Señal 001</p>
+          <h3>Un mensaje sin remitente</h3>
+          <p>Apareció escrito en un libro con pluma, dentro de un cofre sin dueño. Firmaba como «el romano» y dejó tres antorchas encendidas al lado.</p>
+          <span class="code">FUHHSHU</span>
+          <p>Si es una contraseña, el Archivo es el sitio donde probarla.</p>
+        </article>
+        <article class="card">
+          <p class="meta">15 nov 2026 · Señal 002</p>
+          <h3>El cartel del Nether</h3>
+          <p>Un cartel clavado en una pared de netherrack, justo a la entrada de una fortaleza. Solo dice una frase: «Sigue la luz».</p>
+        </article>
+        <article class="card sealed">
+          <p class="meta">Pronto · Señal 003</p>
+          <h3><span class="redact">Todavía sin abrir</span></h3>
+          <p><span class="redact">Esta señal aparecerá más adelante, cuando alguien la encuentre.</span></p>
+        </article>
+        <article class="card sealed">
+          <p class="meta">Pronto · Señal 004</p>
+          <h3><span class="redact">Todavía sin abrir</span></h3>
+          <p><span class="redact">Esta señal aparecerá más adelante, cuando alguien la encuentre.</span></p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ARCHIVO -->
+    <section class="view" data-view="archivo" aria-label="Archivo">
+      <h2 class="title">Archivo</h2>
+      <p class="lead">Expedientes sellados. Cada uno se abre con una palabra. La palabra siempre está escondida en algún sitio.</p>
+      <div class="stack" id="files"></div>
+    </section>
+
+    <!-- DECODIFICADOR -->
+    <section class="view" data-view="decodificador" aria-label="Decodificador">
+      <h2 class="title">Decodificador</h2>
+      <p class="lead">Pega un texto raro, elige el tipo de cifrado y mira qué sale. Si no sabes cuál es, prueba uno por uno.</p>
+      <div class="card tool">
+        <div>
+          <label for="dc-in">Texto cifrado</label>
+          <textarea id="dc-in" spellcheck="false" placeholder="Escribe o pega aquí…"></textarea>
+        </div>
+        <div class="row2">
+          <div>
+            <label for="dc-type">Tipo</label>
+            <select id="dc-type">
+              <option value="caesar">César (desplazamiento)</option>
+              <option value="atbash">Atbash (alfabeto al revés)</option>
+              <option value="a1z26">A1Z26 (números a letras)</option>
+              <option value="hex">Hexadecimal</option>
+              <option value="bin">Binario</option>
+              <option value="morse">Morse</option>
+              <option value="b64">Base64</option>
+            </select>
+          </div>
+          <div id="dc-shift-wrap">
+            <label for="dc-shift">Desplazamiento: <span id="dc-shift-val">3</span></label>
+            <input type="range" id="dc-shift" min="1" max="25" value="3">
+          </div>
+        </div>
+        <div>
+          <label for="dc-out">Resultado</label>
+          <div class="out" id="dc-out" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TERMINAL -->
+    <section class="view" data-view="terminal" aria-label="Terminal">
+      <h2 class="title">Terminal</h2>
+      <p class="lead">Escribe comandos. Empieza por «ayuda». Algunos no salen en la lista.</p>
+      <div>
+        <div class="term" id="term" role="log" aria-live="polite"></div>
+        <form class="prompt" id="term-form" autocomplete="off">
+          <span aria-hidden="true">&gt;</span>
+          <input type="text" id="term-in" aria-label="Comando" spellcheck="false" autocapitalize="off" autocomplete="off">
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p class="tag">Fulgor III · Minecraft · <a href="https://x.com/PixelmonFulgor" target="_blank" rel="noopener">@PixelmonFulgor</a></p>
+    <p class="bits">01000110 01010101 01001100 01000111 01001111 01010010</p>
+  </footer>
+</div>
+
+<script>
+  /* ---------- Utilidades ---------- */
+  var $ = function (id) { return document.getElementById(id); };
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  function norm(s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+  function hash(s) { var x = 5381; for (var i = 0; i < s.length; i++) { x = (((x << 5) + x) ^ s.charCodeAt(i)) >>> 0; } return x.toString(36); }
+  var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] || null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { mem[k] = v; } } };
+  var mem = {};
+
+  /* ---------- Cuenta atrás ---------- */
+  // Apertura: 20 de marzo de 2027, 00:00 hora de España peninsular (UTC+1 en esa fecha).
+  var TARGET = new Date("2027-03-20T00:00:00+01:00").getTime();
+  var cd = { d: $("d"), h: $("h"), m: $("m"), s: $("s") };
+  function tick() {
+    var left = TARGET - Date.now();
+    if (left <= 0) {
+      cd.d.textContent = cd.h.textContent = cd.m.textContent = cd.s.textContent = "00";
+      $("msg").textContent = "Ya estamos aquí";
+      return false;
+    }
+    var secs = Math.floor(left / 1000), days = Math.floor(secs / 86400);
+    cd.d.textContent = days < 100 ? pad(days) : String(days);
+    cd.h.textContent = pad(Math.floor((secs % 86400) / 3600));
+    cd.m.textContent = pad(Math.floor((secs % 3600) / 60));
+    cd.s.textContent = pad(secs % 60);
+    return true;
+  }
+  if (tick()) { var timer = setInterval(function () { if (!tick()) clearInterval(timer); }, 1000); }
+  function daysLeft() { return Math.max(0, Math.ceil((TARGET - Date.now()) / 86400000)); }
+
+  /* ---------- Navegación por apartados ---------- */
+  var VIEWS = ["inicio", "senales", "archivo", "decodificador", "terminal"];
+  function show() {
+    var name = (location.hash || "").replace("#", "");
+    if (VIEWS.indexOf(name) === -1) name = "inicio";
+    VIEWS.forEach(function (v) {
+      document.querySelector('[data-view="' + v + '"]').classList.toggle("on", v === name);
+      var a = document.querySelector('[data-nav="' + v + '"]');
+      if (v === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    document.querySelector(".brand").style.visibility = name === "inicio" ? "hidden" : "visible";
+    window.scrollTo(0, 0);
+    if (name === "terminal" && window.matchMedia("(pointer: fine)").matches) $("term-in").focus();
+  }
+  window.addEventListener("hashchange", show);
+
+  /* ---------- Botón de inicio de las pistas ---------- */
+  // Pulsar el punto de "Servidor en espera": interferencia en la pantalla y salto a Señales.
+  // Para que lleve a otro sitio (por ejemplo un Discord), sustituye location.hash por window.open(URL).
+  var busy = false;
+  $("signal-btn").addEventListener("click", function () {
+    if (busy) return;
+    busy = true;
+    var home = document.querySelector('[data-view="inicio"]');
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $("status-text").textContent = "Recibiendo señal…";
+    if (!reduce) home.classList.add("glitch");
+    setTimeout(function () {
+      home.classList.remove("glitch");
+      $("status-text").textContent = "Servidor en espera";
+      busy = false;
+      location.hash = "#senales";
+      var first = $("sig-001");
+      first.classList.remove("ping");
+      void first.offsetWidth;
+      if (!reduce) first.classList.add("ping");
+    }, reduce ? 300 : 1300);
+  });
+
+  /* ---------- Archivo (expedientes con contraseña) ---------- */
+  // Para añadir un expediente nuevo: copia un bloque, cambia sus textos y pon el hash de la contraseña
+  // (la función hash() de arriba, aplicada a la palabra en mayúsculas y sin tildes).
+  var FILES = [
+    { id: "001", title: "El creeper silencioso", pass: "huyi5v",
+      body: ["Los creepers no avisan hasta que es demasiado tarde. Este informe recoge los avistamientos de uno que nunca llegó a explotar.", "Se quedó mirando la base durante tres noches seguidas, sin moverse. Nadie sabe qué esperaba."],
+      clueLabel: "Siguiente llave", clue: "4-9-1-13-1-14-20-5", clueNote: "Cada letra tiene un número. Empieza por el principio del alfabeto." },
+    { id: "002", title: "La mina sin fondo", pass: "19y6xqy",
+      body: ["Alguien cavó una escalera hacia abajo hasta la última capa. No había lava ni bedrock al final, solo un cartel.", "El cartel tenía escrita una única palabra, pero en el idioma de los ordenadores."],
+      clueLabel: "Siguiente llave", clue: "45 4E 44 45 52", clueNote: "Los ordenadores cuentan de dieciséis en dieciséis." },
+    { id: "003", title: "El portal sin encender", pass: "3cew65",
+      body: ["Un marco de portal completo, sin encender, en mitad de ninguna parte. Alguien lo cubrió con un cartel escrito al revés.", "La primera letra es la última, la segunda es la penúltima, y así hasta el final."],
+      clueLabel: "Siguiente llave", clue: "LYHRWRZMZ", clueNote: "Es un material que se forma cuando el agua toca la lava quieta." },
+    { id: "004", title: "Expediente sellado", pass: "1334p4h",
+      body: ["Has llegado hasta el final del archivo por ahora.", "El resto de expedientes se abrirá cuando empiece Fulgor III. Vuelve el 20 de marzo.", "Mientras tanto, hay un comando en el terminal que casi nadie prueba. El pie de página tiene el nombre."],
+      clueLabel: null }
+  ];
+  var solved = {};
+  try { solved = JSON.parse(store.get("fulgor-solved") || "{}"); } catch (e) { solved = {}; }
+  function saveSolved() { store.set("fulgor-solved", JSON.stringify(solved)); }
+
+  function renderFiles() {
+    var wrap = $("files");
+    wrap.textContent = "";
+    FILES.forEach(function (f) {
+      var open = !!solved[f.id];
+      var card = document.createElement("article");
+      card.className = "card" + (open ? "" : " sealed");
+      var meta = document.createElement("p"); meta.className = "meta";
+      meta.textContent = "Expediente " + f.id;
+      var badge = document.createElement("span"); badge.className = "badge" + (open ? " open" : "");
+      badge.textContent = open ? "Abierto" : "Sellado";
+      meta.appendChild(badge);
+      card.appendChild(meta);
+      var h = document.createElement("h3"); h.textContent = open ? f.title : "Contenido sellado"; card.appendChild(h);
+      if (open) {
+        f.body.forEach(function (t) { var p = document.createElement("p"); p.textContent = t; card.appendChild(p); });
+        if (f.clue) {
+          var lab = document.createElement("p"); lab.className = "meta"; lab.textContent = f.clueLabel; card.appendChild(lab);
+          var c = document.createElement("span"); c.className = "code"; c.textContent = f.clue; card.appendChild(c);
+          var n = document.createElement("p"); n.textContent = f.clueNote; card.appendChild(n);
+        }
+      } else {
+        var p = document.createElement("p"); p.textContent = "Escribe la palabra para abrir este expediente."; card.appendChild(p);
+        var form = document.createElement("form"); form.className = "lock-row"; form.autocomplete = "off";
+        var inp = document.createElement("input"); inp.type = "text"; inp.id = "pw-" + f.id; inp.setAttribute("aria-label", "Contraseña del expediente " + f.id); inp.spellcheck = false; inp.autocomplete = "off"; inp.placeholder = "Contraseña";
+        var btn = document.createElement("button"); btn.type = "submit"; btn.className = "btn"; btn.textContent = "Abrir";
+        form.appendChild(inp); form.appendChild(btn); card.appendChild(form);
+        var msg = document.createElement("p"); msg.className = "msg"; msg.setAttribute("aria-live", "polite"); card.appendChild(msg);
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          if (hash(norm(inp.value)) === f.pass && norm(inp.value) !== "") {
+            solved[f.id] = true; saveSolved(); renderFiles();
+          } else {
+            msg.className = "msg bad"; msg.textContent = "Esa no es. Sigue buscando.";
+          }
+        });
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  /* ---------- Decodificador ---------- */
+  var MORSE = { ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E", "..-.": "F", "--.": "G", "....": "H", "..": "I", ".---": "J", "-.-": "K", ".-..": "L", "--": "M", "-.": "N", "---": "O", ".--.": "P", "--.-": "Q", ".-.": "R", "...": "S", "-": "T", "..-": "U", "...-": "V", ".--": "W", "-..-": "X", "-.--": "Y", "--..": "Z", "-----": "0", ".----": "1", "..---": "2", "...--": "3", "....-": "4", ".....": "5", "-....": "6", "--...": "7", "---..": "8", "----.": "9" };
+  function mapLetters(s, fn) {
+    return s.replace(/[A-Za-z]/g, function (ch) {
+      var up = ch === ch.toUpperCase(), base = up ? 65 : 97;
+      return String.fromCharCode(fn(ch.charCodeAt(0) - base) + base);
+    });
+  }
+  function bytesToText(bytes) {
+    try { return new TextDecoder("utf-8").decode(new Uint8Array(bytes)); }
+    catch (e) { return bytes.map(function (b) { return String.fromCharCode(b); }).join(""); }
+  }
+  var DEC = {
+    caesar: function (s) { var n = +$("dc-shift").value; return mapLetters(s, function (i) { return (i - n + 26) % 26; }); },
+    atbash: function (s) { return mapLetters(s, function (i) { return 25 - i; }); },
+    a1z26: function (s) { return s.replace(/\d+/g, function (n) { n = +n; return n >= 1 && n <= 26 ? String.fromCharCode(64 + n) : n; }).replace(/([A-Z])[\s\-]+(?=[A-Z])/g, "$1"); },
+    hex: function (s) { var m = s.replace(/0x/gi, "").match(/[0-9a-f]{2}/gi); return m ? bytesToText(m.map(function (h) { return parseInt(h, 16); })) : ""; },
+    bin: function (s) { var m = s.replace(/[^01]/g, "").match(/[01]{8}/g); return m ? bytesToText(m.map(function (b) { return parseInt(b, 2); })) : ""; },
+    morse: function (s) { return s.trim().split(/\s*\/\s*|\s{3,}/).map(function (w) { return w.trim().split(/\s+/).map(function (c) { return MORSE[c] || "?"; }).join(""); }).join(" "); },
+    b64: function (s) {
+      try { var bin = atob(s.replace(/\s+/g, "")); var arr = []; for (var i = 0; i < bin.length; i++) arr.push(bin.charCodeAt(i)); return bytesToText(arr); }
+      catch (e) { return "Eso no parece Base64 válido."; }
+    }
+  };
+  function decode() {
+    var type = $("dc-type").value;
+    $("dc-shift-wrap").style.display = type === "caesar" ? "" : "none";
+    $("dc-shift-val").textContent = $("dc-shift").value;
+    var src = $("dc-in").value;
+    $("dc-out").textContent = src.trim() ? DEC[type](src) : "";
+  }
+  ["dc-in", "dc-type", "dc-shift"].forEach(function (id) { $(id).addEventListener("input", decode); });
+
+  /* ---------- Terminal ---------- */
+  var SERVER_ADDR = "108.181.58.76:25708"; // IP del servidor de Minecraft
+  var term = $("term");
+  function line(text, cls) { var p = document.createElement("p"); p.className = "ln " + (cls || "sys"); p.textContent = text; term.appendChild(p); term.scrollTop = term.scrollHeight; }
+  function linkLine(href) {
+    var p = document.createElement("p"); p.className = "ln sys";
+    var a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = href;
+    p.appendChild(a); term.appendChild(p); term.scrollTop = term.scrollHeight;
+  }
+  function TW() { return ["Twitter (X) oficial de Fulgor:", { href: "https://x.com/PixelmonFulgor" }]; }
+  function TIEMPO() {
+    var s = Math.floor((TARGET - Date.now()) / 1000);
+    if (s <= 0) return ["El servidor ya debería estar abierto."];
+    return ["Tiempo de espera: " + Math.floor(s / 86400) + " días, " + Math.floor((s % 86400) / 3600) + " horas y " + Math.floor((s % 3600) / 60) + " minutos.", "Apertura: 20 de marzo de 2027."];
+  }
+  var CMDS = {
+    ayuda: function () { return ["Comandos: ayuda, estado, tiempo, hora, version, jugadores, twitter, limpiar", "Hay más. No todos salen en la lista."]; },
+    twitter: TW, x: TW, redes: TW, novedades: TW,
+    hora: function () { return ["Hora del servidor: " + new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" })]; },
+    version: function () { return ["Fulgor III · versión 0.0.0", "Estado: en construcción"]; },
+    jugadores: function () {
+      line("Consultando el servidor…", "dim");
+      var ctl = new AbortController();
+      var t = setTimeout(function () { ctl.abort(); }, 7000);
+      return fetch("https://api.mcsrvstat.us/3/" + SERVER_ADDR, { signal: ctl.signal })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          clearTimeout(t);
+          if (!j || !j.online) return ["El servidor está apagado o no responde."];
+          var p = j.players || {}, out = ["Jugadores conectados: " + (p.online || 0) + " / " + (p.max || "?")];
+          if (p.list && p.list.length) out.push(p.list.map(function (x) { return x.name; }).join(", "));
+          else if (p.online) out.push("(El servidor no comparte los nombres.)");
+          return out;
+        })
+        .catch(function () { clearTimeout(t); return ["No se ha podido consultar el servidor desde aquí."]; });
+    },
+    estado: function () { return ["Servidor: en espera", "Apertura: 20 de marzo de 2027", "Novedades: escribe «twitter»"]; },
+    tiempo: TIEMPO, espera: TIEMPO,
+    creeper: function () { return ["ssssssSSSSSS…", "(No ha pasado nada. Por ahora.)"]; },
+    pista: function () { return ["Mira la señal más antigua. El romano sabe contar hasta tres."]; },
+    fulgor: function () { return ["FULGOR III · apertura el 20 de marzo.", "Todavía no es hora de saber más. Vuelve pronto."]; },
+    limpiar: function () { term.textContent = ""; return []; }
+  };
+  line("Terminal de Fulgor III · escribe «ayuda» para empezar.", "dim");
+  $("term-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var inp = $("term-in"), raw = inp.value.trim();
+    if (!raw) return;
+    line("> " + raw, "me");
+    var key = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\s_\-]+/g, "");
+    if (CMDS[key]) Promise.resolve(CMDS[key]()).then(function (arr) { arr.forEach(function (t) { if (typeof t === "object") linkLine(t.href); else line(t); }); });
+    else line("Comando no reconocido: " + raw + ". Prueba con «ayuda».", "dim");
+    inp.value = "";
+  });
+
+  /* ---------- Arranque ---------- */
+  renderFiles();
+  decode();
+  show();
+</script>
+</body>
+</html>

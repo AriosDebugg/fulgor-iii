@@ -1,0 +1,9 @@
+{
+  "name": "fulgor-iii",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web de espera de Fulgor III (estática)",
+  "scripts": {
+    "build": "mkdir -p dist/public && cp index.html logo.png dist/public/"
+  }
+}

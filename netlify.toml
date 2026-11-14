@@ -1,0 +1,4 @@
+# Web estática: no hay nada que construir, se publica la carpeta raíz tal cual.
+[build]
+  publish = "."
+  command = "echo 'Web estatica, sin build'"
